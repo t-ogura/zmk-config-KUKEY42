@@ -22,7 +22,7 @@ manifest:
       revision: main
     - name: prospector-zmk-module
       remote: prospector
-      revision: feature/scanner-mode-clean 
+      revision: feature/layer-event-listener
       path: modules/prospector-zmk-module
   self:
     path: config
