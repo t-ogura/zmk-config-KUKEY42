@@ -9,6 +9,33 @@
 #define SCROLL 5
 #define NUM 6
 
+// OS設定を日本語キーボードのまま使用するための変換定義
+
+#define JP_DQUOTE       AT                // "
+#define JP_AMPERSAND    CARET             // &
+#define JP_QUOTE        AMPERSAND         // '
+#define JP_EQUAL        UNDER             // =
+#define JP_CARET        EQUAL             // ^
+#define JP_YEN          0x89              // ¥
+#define JP_PLUS         COLON             // +
+#define JP_TILDE        PLUS              // ~
+#define JP_PIPE         LS(0x89)          // |
+#define JP_AT           LEFT_BRACKET      // @
+#define JP_COLON        SINGLE_QUOTE      // :
+#define JP_ASTERISK     DOUBLE_QUOTES     // *
+#define JP_BACKQUOTE    LEFT_BRACE        // `
+#define JP_UNDERSCORE   LS(0x87)          // _
+#define JP_LBRACKET     RIGHT_BRACKET     // [
+#define JP_RBRACKET     BACKSLASH         // ]
+#define JP_LPAREN       ASTERISK          // (
+#define JP_RPAREN       LEFT_PARENTHESIS  // )
+#define JP_LBRACE       RIGHT_BRACE       // {
+#define JP_RBRACE       PIPE              // }
+#define JP_KANA         LANGUAGE_1        // かな
+#define JP_EISU         LANGUAGE_2        // 英数
+#define JP_HANZEN       GRAVE             // 半角/全角
+
+
 &mt {
     flavor = "balanced";
     quick-tap-ms = <0>;
@@ -72,8 +99,8 @@
         FUNCTION {
             bindings = <
 &kp F1  &kp F2           &kp F3  &kp F4  &kp F5                      &kp F6  &kp F7  &kp F8  &kp F9  &kp F10
-&trans  &kp EXCLAMATION  &trans  &trans  &trans  &trans      &trans  &trans  &trans  &trans  &trans  &trans
-&trans  &kp QUESTION     &trans  &trans  &trans  &trans      &trans  &trans  &trans  &trans  &trans  &kp F11
+&kp JP_COLON   &kp EXCLAMATION  &kp SLASH   &kp JP_LPAREN  &kp JP_LBRACKET  &trans          &trans  &kp JP_UNDERSCORE  &kp F7      &kp F8  &kp F9  &kp SEMICOLON
+&kp SEMICOLON  &kt QUESTION     &kp JP_YEN  &kp JP_RPAREN  &kp JP_RBRACKET  &kp JP_QUOTE    &trans  &sk JP_AT          &kp DOLLAR  &trans  &trans  &kp F11
 &trans  &trans           &trans  &trans  &trans  &trans      &trans  &trans                          &mt RIGHT_SHIFT F12
             >;
 
@@ -83,9 +110,9 @@
         NUM {
             bindings = <
 &kp TAB               &kp N7        &kp N8        &kp N9        &kp MINUS                                        &kp RIGHT_BRACKET  &trans    &mkp MB3  &trans     &trans
-&kp ASTERISK          &kp NUMBER_4  &kp N5        &kp NUMBER_6  &kp PLUS   &trans                    &trans      &kp RPAR           &mkp MB1  &kp UP    &mkp MB2   &kp COLON
-&mt LEFT_SHIFT SLASH  &kp NUMBER_1  &kp NUMBER_2  &kp NUMBER_3  &kp EQUAL  &kp LC(SINGLE_QUOTE)      &kp DELETE  &kp RIGHT_BRACE    &kp LEFT  &kp DOWN  &kp RIGHT  &kp SLASH
-&kp ESCAPE            &kp N0        &kp PERIOD    &trans        &trans     &trans                    &trans      &trans                                            &trans
+&kp JP_ASTERISK              &kp NUMBER_4  &kp N5        &kp NUMBER_6  &kp JP_PLUS     &trans                    &trans      &kp RPAR           &mkp MB1  &kp UP    &mkp MB2   &kp COLON
+&mt LEFT_SHIFT SLASH  &kp NUMBER_1  &kp NUMBER_2  &kp NUMBER_3  &kp EQUAL  &kp JP_BACKQUOTE                &kp DELETE  &kp RIGHT_BRACE    &kp LEFT  &kp DOWN  &kp RIGHT  &kp SLASH
+&kp ESCAPE            &kp N0        &kp PERIOD    &kp DEL        &trans     &trans                    &trans      &trans                                            &trans
             >;
         };
 
