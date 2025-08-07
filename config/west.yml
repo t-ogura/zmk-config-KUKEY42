@@ -22,7 +22,7 @@ manifest:
       revision: main
     - name: prospector-zmk-module
       remote: prospector
-      revision: feature/layer-event-listener
+      revision: feature/v1.1-fixes
       path: modules/prospector-zmk-module
   self:
     path: config
