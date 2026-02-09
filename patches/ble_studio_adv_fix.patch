@@ -1,0 +1,62 @@
+diff --git a/app/src/ble.c b/app/src/ble.c
+index 49db2808..6218821d 100644
+--- a/app/src/ble.c
++++ b/app/src/ble.c
+@@ -37,6 +37,10 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
+ #include <zmk/event_manager.h>
+ #include <zmk/events/ble_active_profile_changed.h>
+ 
++#if IS_ENABLED(CONFIG_ZMK_STUDIO)
++#include "studio/uuid.h"
++#endif
++
+ #if IS_ENABLED(CONFIG_ZMK_BLE_PASSKEY_ENTRY)
+ #include <zmk/events/keycode_state_changed.h>
+ 
+@@ -62,7 +66,8 @@ enum advertising_type {
+ 
+ static struct zmk_ble_profile profiles[ZMK_BLE_PROFILE_COUNT];
+ static uint8_t active_profile;
+-static bool directed_advertising_enabled = false;
++static bool directed_advertising_enabled =
++    IS_ENABLED(CONFIG_ZMK_STUDIO) && !IS_ENABLED(CONFIG_ZMK_STUDIO_LOCKING);
+ 
+ #define DEVICE_NAME CONFIG_BT_DEVICE_NAME
+ #define DEVICE_NAME_LEN (sizeof(DEVICE_NAME) - 1)
+@@ -79,6 +84,17 @@ static struct bt_data zmk_ble_ad[] = {
+                   ),
+ };
+ 
++#if IS_ENABLED(CONFIG_ZMK_STUDIO)
++static struct bt_data zmk_ble_sd[] = {
++    BT_DATA_BYTES(BT_DATA_UUID128_SOME, ZMK_STUDIO_BT_SERVICE_UUID),
++};
++#define ZMK_BLE_SD     zmk_ble_sd
++#define ZMK_BLE_SD_LEN ARRAY_SIZE(zmk_ble_sd)
++#else
++#define ZMK_BLE_SD     NULL
++#define ZMK_BLE_SD_LEN 0
++#endif
++
+ #if IS_ENABLED(CONFIG_ZMK_SPLIT_BLE) && IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+ 
+ static bt_addr_le_t peripheral_addrs[ZMK_SPLIT_BLE_PERIPHERAL_COUNT];
+@@ -161,7 +177,7 @@ bool zmk_ble_profile_is_connected(uint8_t index) {
+         return 0;                                                                                  \
+     }                                                                                              \
+     err = bt_le_adv_start(BT_LE_ADV_CONN_DIR_LOW_DUTY(addr), zmk_ble_ad, ARRAY_SIZE(zmk_ble_ad),   \
+-                          NULL, 0);                                                                \
++                          ZMK_BLE_SD, ZMK_BLE_SD_LEN);                                            \
+     if (err) {                                                                                     \
+         LOG_ERR("Advertising failed to start (err %d)", err);                                      \
+         return err;                                                                                \
+@@ -169,7 +185,8 @@ bool zmk_ble_profile_is_connected(uint8_t index) {
+     advertising_status = ZMK_ADV_DIR;
+ 
+ #define CHECKED_OPEN_ADV()                                                                         \
+-    err = bt_le_adv_start(ZMK_ADV_CONN_NAME, zmk_ble_ad, ARRAY_SIZE(zmk_ble_ad), NULL, 0);         \
++    err = bt_le_adv_start(ZMK_ADV_CONN_NAME, zmk_ble_ad, ARRAY_SIZE(zmk_ble_ad),                    \
++                          ZMK_BLE_SD, ZMK_BLE_SD_LEN);                                            \
+     if (err) {                                                                                     \
+         LOG_ERR("Advertising failed to start (err %d)", err);                                      \
+         return err;                                                                                \
