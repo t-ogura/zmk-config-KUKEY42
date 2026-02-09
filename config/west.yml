@@ -10,8 +10,8 @@ manifest:
       url-base: https://github.com/r-Keys-kbd
     - name: caksoylar
       url-base: https://github.com/caksoylar
-    # - name: prospector
-    #   url-base: https://github.com/t-ogura
+    - name: prospector
+      url-base: https://github.com/t-ogura
   projects:
     # ZMK: cormoran fork with custom RPC subsystem for DYA Studio
     - name: zmk
@@ -26,11 +26,11 @@ manifest:
     - name: zmk-rgbled-widget
       remote: caksoylar
       revision: main
-    # Prospector: disabled for DYA Studio compatibility
-    # - name: prospector-zmk-module
-    #   remote: prospector
-    #   revision: v2.0.0
-    #   path: modules/prospector-zmk-module
+    # Prospector
+    - name: prospector-zmk-module
+      remote: prospector
+      revision: v2.0.0
+      path: modules/prospector-zmk-module
     # DYA Studio modules
     - name: zmk-module-ble-management
       remote: cormoran
