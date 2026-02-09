@@ -199,13 +199,17 @@ Flash order:
 
 ---
 
-## Known Issue: BLE Freeze on Split Keyboards with Sensors
+## Known Issues
 
-### Symptom
+---
+
+### Issue 1: BLE Freeze on Split Keyboards (central.c patch)
+
+#### Symptom
 
 Central side **completely freezes** when the peripheral connects (green LED stays on, USB doesn't enumerate). Works fine when peripheral is powered off.
 
-### Who is Affected?
+#### Who is Affected?
 
 Any split keyboard that has **ALL** of the following:
 - `CONFIG_ZMK_SPLIT_RELAY_EVENT=y`
@@ -214,13 +218,41 @@ Any split keyboard that has **ALL** of the following:
 
 This creates **4+ concurrent GATT subscriptions** (position_state, sensor, relay_event, battery) which triggers the bug.
 
-### Root Cause
+#### Root Cause
 
-In `zmk/app/src/split/bluetooth/central.c`, all GATT subscriptions share a **single** `sub_discover_params` structure for CCC (Client Characteristic Configuration) descriptor discovery. When multiple subscriptions are initiated during GATT characteristic discovery, the shared structure's state gets corrupted, causing the Zephyr BLE stack to deadlock.
+In `zmk/app/src/split/bluetooth/central.c`, all GATT subscriptions share a **single** `sub_discover_params` structure in the `peripheral_slot` struct for CCC (Client Characteristic Configuration) descriptor discovery.
 
-### Fix
+When multiple subscriptions are initiated during GATT characteristic discovery, the shared structure's state gets corrupted mid-flight:
 
-Apply the patch from [`patches/central_sub_discover_params_fix.patch`](../patches/central_sub_discover_params_fix.patch):
+1. `subscribe_params` (position_state) initiates GATT discovery using `sub_discover_params`
+2. Before that completes, `sensor_subscribe_params` also uses the same `sub_discover_params`
+3. The second write overwrites the first's state → BLE stack deadlocks
+
+**Original code** (`peripheral_slot` struct):
+```c
+struct peripheral_slot {
+    struct bt_conn *conn;
+    struct bt_gatt_discover_params discover_params;
+    struct bt_gatt_subscribe_params subscribe_params;
+    struct bt_gatt_subscribe_params sensor_subscribe_params;
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_RELAY_EVENT)
+    struct bt_gatt_subscribe_params relay_event_subscribe_params;
+#endif
+    struct bt_gatt_discover_params sub_discover_params;   // ← SHARED by ALL subscriptions!
+    uint16_t run_behavior_handle;
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING)
+    struct bt_gatt_subscribe_params batt_lvl_subscribe_params;
+    // ...
+```
+
+And in `split_central_chrc_discovery_func()`, all subscriptions reference the same struct:
+```c
+slot->sensor_subscribe_params.disc_params = &slot->sub_discover_params;       // shared!
+slot->relay_event_subscribe_params.disc_params = &slot->sub_discover_params;  // shared!
+slot->batt_lvl_subscribe_params.disc_params = &slot->sub_discover_params;     // shared!
+```
+
+#### Fix
 
 Each subscription gets its own dedicated `bt_gatt_discover_params`:
 
@@ -231,13 +263,139 @@ Each subscription gets its own dedicated `bt_gatt_discover_params`:
 | relay_event | `&slot->sub_discover_params` | `&slot->relay_event_sub_discover_params` |
 | battery | `&slot->sub_discover_params` | `&slot->batt_lvl_sub_discover_params` |
 
-Apply the patch:
+#### Applying the Patch
+
 ```bash
-cd zmk-workspace/zmk
-git apply /path/to/patches/central_sub_discover_params_fix.patch
+# From your zmk-workspace directory:
+cd zmk
+git apply /path/to/your-config/patches/central_sub_discover_params_fix.patch
+
+# Verify the patch applied correctly:
+git diff --stat
+#  app/src/split/bluetooth/central.c | 13 +++++++------
+#  1 file changed, 7 insertions(+), 6 deletions(-)
 ```
 
-> **Note**: This patch is overwritten by `west update`. Re-apply after each update. Consider reporting this to cormoran for an upstream fix.
+#### Patch Content
+
+File: `patches/central_sub_discover_params_fix.patch`
+
+```diff
+diff --git a/app/src/split/bluetooth/central.c b/app/src/split/bluetooth/central.c
+index 9fb41a5f..4260b551 100644
+--- a/app/src/split/bluetooth/central.c
++++ b/app/src/split/bluetooth/central.c
+@@ -49,14 +49,17 @@ struct peripheral_slot {
+     struct bt_conn *conn;
+     struct bt_gatt_discover_params discover_params;
+     struct bt_gatt_subscribe_params subscribe_params;
++    struct bt_gatt_discover_params sub_discover_params;
+     struct bt_gatt_subscribe_params sensor_subscribe_params;
++    struct bt_gatt_discover_params sensor_sub_discover_params;
+ #if IS_ENABLED(CONFIG_ZMK_SPLIT_RELAY_EVENT)
+     struct bt_gatt_subscribe_params relay_event_subscribe_params;
++    struct bt_gatt_discover_params relay_event_sub_discover_params;
+ #endif
+-    struct bt_gatt_discover_params sub_discover_params;
+     uint16_t run_behavior_handle;
+ #if IS_ENABLED(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING)
+     struct bt_gatt_subscribe_params batt_lvl_subscribe_params;
++    struct bt_gatt_discover_params batt_lvl_sub_discover_params;
+     struct bt_gatt_read_params batt_lvl_read_params;
+ #endif
+ #if IS_ENABLED(CONFIG_ZMK_SPLIT_PERIPHERAL_HID_INDICATORS)
+@@ -711,7 +714,7 @@ static uint8_t split_central_chrc_discovery_func(...)
+-            slot->sensor_subscribe_params.disc_params = &slot->sub_discover_params;
++            slot->sensor_subscribe_params.disc_params = &slot->sensor_sub_discover_params;
+@@ -726,7 +729,7 @@ static uint8_t split_central_chrc_discovery_func(...)
+-            slot->relay_event_subscribe_params.disc_params = &slot->sub_discover_params;
++            slot->relay_event_subscribe_params.disc_params = &slot->relay_event_sub_discover_params;
+@@ -775,7 +778,7 @@ static uint8_t split_central_chrc_discovery_func(...)
+-            slot->batt_lvl_subscribe_params.disc_params = &slot->sub_discover_params;
++            slot->batt_lvl_subscribe_params.disc_params = &slot->batt_lvl_sub_discover_params;
+```
+
+> **Important**: This patch is overwritten by `west update`. Re-apply after each update.
+> The actual patch file in `patches/` can be applied directly with `git apply`.
+
+---
+
+### Issue 2: DYA Studio Cannot Detect Keyboard via Bluetooth
+
+#### Symptom
+
+DYA Studio detects the keyboard via USB (CDC ACM serial) but **cannot find it via Bluetooth** pairing. The BLE device picker in the browser shows no matching devices.
+
+#### Root Cause Analysis
+
+There are **two independent issues** preventing BLE detection:
+
+**Issue A: Studio GATT Service UUID Not Advertised**
+
+DYA Studio (based on [zmk-studio-ts-client](https://github.com/zmkfirmware/zmk-studio-ts-client)) uses the Web Bluetooth API to discover keyboards:
+
+```typescript
+// zmk-studio-ts-client/src/transport/gatt.ts
+const SERVICE_UUID = '00000000-0196-6107-c967-c5cfb1c2482a';
+
+let dev = await navigator.bluetooth.requestDevice({
+  filters: [{ services: [SERVICE_UUID] }],  // ← filters by THIS UUID
+  optionalServices: [SERVICE_UUID],
+});
+```
+
+The Web Bluetooth API **only shows devices that advertise the filtered service UUID**. However, the ZMK firmware's BLE advertisement data (`ble.c:74-80`) only includes HID and Battery 16-bit UUIDs:
+
+```c
+// zmk/app/src/ble.c
+static struct bt_data zmk_ble_ad[] = {
+    BT_DATA_BYTES(BT_DATA_GAP_APPEARANCE, 0xC1, 0x03),
+    BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+    BT_DATA_BYTES(BT_DATA_UUID16_SOME, 0x12, 0x18,   /* HID Service */
+                  0x0f, 0x18                          /* Battery Service */
+                  ),
+};
+```
+
+The 128-bit Studio service UUID (`00000000-0196-6107-c967-c5cfb1c2482a`) is **not included**, so the keyboard is invisible to the Web Bluetooth device picker.
+
+The GATT service itself IS properly registered in `gatt_rpc_transport.c`, but registration alone doesn't make it appear in advertisements.
+
+**Issue B: Advertising Stops When Connected to Host**
+
+When the keyboard is paired and connected to a BLE host (e.g., PC/tablet), `zmk_ble_active_profile_is_connected()` returns `true`. The advertising logic in `ble.c` then sets `desired_adv = ZMK_ADV_NONE` (stop advertising) — unless `directed_advertising_enabled` is `true`.
+
+The `directed_advertising_enabled` flag is only set to `true` when `zmk_studio_core_unlock()` is called (`core.c:50`). But with `CONFIG_ZMK_STUDIO_LOCKING=n`, the keyboard starts in UNLOCKED state and `unlock()` is **never called**, so the flag remains `false`.
+
+```
+Flow when CONFIG_ZMK_STUDIO_LOCKING=n:
+  Boot → state = UNLOCKED (already) → unlock() never called
+       → directed_advertising_enabled = false (forever)
+       → Connected to BLE host → desired_adv = ZMK_ADV_NONE
+       → Keyboard stops advertising → Invisible to DYA Studio
+```
+
+#### Potential Fixes
+
+**Fix for Issue B (try first — config change only):**
+
+Enable Studio locking to activate the directed advertising flow:
+
+```ini
+# Replace CONFIG_ZMK_STUDIO_LOCKING=n with:
+CONFIG_ZMK_STUDIO_LOCKING=y
+CONFIG_ZMK_STUDIO_LOCK_IDLE_TIMEOUT_SEC=600
+```
+
+With locking enabled, the user performs a physical unlock action → `zmk_studio_core_unlock()` is called → `directed_advertising_enabled = true` → keyboard continues advertising even when connected.
+
+**Fix for Issue A (firmware patch — may be needed):**
+
+The Studio service 128-bit UUID needs to be added to the BLE advertisement data in `ble.c`. This likely requires a patch to the cormoran ZMK fork. The 128-bit UUID is 16 bytes, so it may need to go in the scan response data due to the 31-byte advertisement limit.
+
+#### Current Status
+
+This issue is **upstream in the cormoran ZMK fork** and may require coordination with the fork maintainer. The USB transport works reliably as a workaround.
 
 ---
 
