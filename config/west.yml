@@ -38,5 +38,7 @@ manifest:
       remote: cormoran
     - name: zmk-module-settings-rpc
       remote: cormoran
+    - name: zmk-module-runtime-input-processor
+      remote: cormoran
   self:
     path: config
